@@ -534,8 +534,17 @@
             <input type="password" id="login-password" class="input-field" placeholder="Password">
             <input type="text" id="login-name" class="input-field" placeholder="Nama Lengkap">
             <input type="text" id="household-code-input" class="input-field" placeholder="Kode Pasangan (Opsional)">
-            
-            <button class="btn-primary" onclick="handleLogin()">Masuk / Daftar</button>
+
+<!-- Checkbox Trusted Device -->
+<div style="display: flex; align-items: center; gap: 8px; margin: 15px 0; font-size: 13px; color: #666;">
+    <input type="checkbox" id="remember-device" checked style="width: 18px; height: 18px; accent-color: var(--terracotta); cursor: pointer;">
+    <label for="remember-device" style="cursor: pointer;">
+        <i class="fas fa-shield-alt" style="color: var(--terracotta);"></i> 
+        Ingat perangkat ini (tidak perlu login ulang)
+    </label>
+</div>
+
+<button class="btn-primary" onclick="handleLogin()">Masuk / Daftar</button>
             <p id="login-error" style="color: red; font-size: 12px; margin-top: 10px; text-align: center;"></p>
         </div>
     </div>
@@ -712,32 +721,28 @@
 
     <script>
     // ============================================
-    // KONFIGURASI SUPABASE - SCOPE GLOBAL
+    // KONFIGURASI SUPABASE
     // ============================================
     const SUPABASE_URL = "https://ykurashievlvjvislkat.supabase.co";
     const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlrdXJhc2hpZXZsdmp2aXNsa2F0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3MjYyNzQwMzksImV4cCI6MjA0MTg1MDAzOX0.3BfyOodIQwf6LKy0EF2Fugso8Z0bDp1KLf2a0hhxk";
     
-    // Deklarasi global
-    let supabaseClient;
+    // Inisialisasi Supabase dengan persistensi session
+    const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+        auth: {
+            persistSession: true,        // Simpan session di localStorage
+            autoRefreshToken: true,      // Auto-refresh token
+            storage: localStorage,       // Gunakan localStorage (bukan sessionStorage)
+            detectSessionInUrl: true
+        }
+    });
+
+    // Variabel Global
     let currentUser = null;
     let currentHouseholdCode = "";
     let allTransactions = [];
     let allTasks = [];
     let allAssets = [];
     let itemToDeleteId = null;
-
-    // Inisialisasi saat halaman load
-    window.addEventListener('DOMContentLoaded', () => {
-        console.log("🔵 Initializing Supabase...");
-        
-        try {
-            supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-            console.log("✅ Supabase client created:", supabaseClient);
-            console.log("✅ Supabase.from tersedia:", typeof supabaseClient.from);
-        } catch (error) {
-            console.error("❌ Failed to create Supabase client:", error);
-        }
-    });
 
     // ============================================
     // FUNGSI UTILITAS
@@ -766,54 +771,151 @@
     }
 
     // ============================================
-    // AUTHENTICATION
+    // AUTO-LOGIN SAAT HALAMAN LOAD
+    // ============================================
+    window.addEventListener('DOMContentLoaded', async () => {
+        console.log("🔍 Memeriksa session yang ada...");
+        
+        try {
+            // Cek apakah ada session yang masih valid
+            const { data: { session }, error } = await supabaseClient.auth.getSession();
+            
+            if (error) throw error;
+            
+            if (session) {
+                console.log("✅ Session ditemukan! Auto-login...");
+                currentUser = session.user;
+                
+                // Load data user dari localStorage
+                const storedData = JSON.parse(localStorage.getItem(`user_${currentUser.id}`));
+                
+                if (storedData) {
+                    currentHouseholdCode = storedData.householdCode;
+                    document.getElementById('account-name').innerText = storedData.name;
+                    document.getElementById('greeting-name').innerText = storedData.name + "! 👋";
+                    document.getElementById('account-email').innerText = currentUser.email;
+                    document.getElementById('display-household-code').innerText = currentHouseholdCode;
+                    
+                    // Langsung masuk ke app
+                    document.getElementById('login-screen').style.display = 'none';
+                    document.getElementById('app-screen').style.display = 'block';
+                    
+                    updateGreeting();
+                    setupRealtimeListeners();
+                    populateMonthDropdown();
+                    document.getElementById('tx-date').valueAsDate = new Date();
+                } else {
+                    // Session ada tapi data user tidak ada, logout
+                    console.log("⚠️ Data user tidak ditemukan, logout...");
+                    await supabaseClient.auth.signOut();
+                }
+            } else {
+                console.log("ℹ️ Tidak ada session, tampilkan login screen");
+            }
+        } catch (error) {
+            console.error("❌ Error checking session:", error);
+        }
+        
+        // Setup listener untuk perubahan auth state
+        supabaseClient.auth.onAuthStateChange((event, session) => {
+            console.log("🔔 Auth state changed:", event);
+            
+            if (event === 'SIGNED_OUT') {
+                location.reload();
+            }
+        });
+    });
+
+    // ============================================
+    // LOGIN / REGISTER
     // ============================================
     window.handleLogin = async () => {
         const email = document.getElementById('login-email').value.trim();
         const password = document.getElementById('login-password').value.trim();
         const name = document.getElementById('login-name').value.trim();
         const householdInput = document.getElementById('household-code-input').value.trim().toUpperCase();
+        const rememberDevice = document.getElementById('remember-device').checked; // Checkbox baru
         const errorMsg = document.getElementById('login-error');
 
         if (!email || !password || !name) {
-            errorMsg.innerText = "⚠️ Email, Password, dan Nama wajib diisi!";
+            errorMsg.innerText = "️ Email, Password, dan Nama wajib diisi!";
             return;
         }
 
+        const btn = document.querySelector('#login-screen .btn-primary');
+        btn.disabled = true;
+        btn.innerText = "Loading...";
+        errorMsg.innerText = "";
+
         try {
-            console.log("🔵 Attempting login...");
-            let { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
+            console.log(" Mencoba login...");
             
+            // Login dengan Supabase
+            let { data, error } = await supabaseClient.auth.signInWithPassword({ 
+                email, 
+                password,
+                // Jika "Ingat Perangkat" dicentang, session lebih lama
+                options: {
+                    persistSession: rememberDevice, // true = localStorage, false = sessionStorage
+                }
+            });
+            
+            // Jika gagal login, coba register
             if (error) {
-                console.log("🔵 Login failed, trying register...");
+                console.log(" Login gagal, mencoba register...");
+                
                 const { data: regData, error: regError } = await supabaseClient.auth.signUp({ 
-                    email, password,
-                    options: { data: { name } }
+                    email, 
+                    password,
+                    options: { 
+                        data: { name },
+                        // Auto-confirm email untuk development
+                        emailRedirectTo: window.location.origin
+                    }
                 });
                 
                 if (regError) throw regError;
                 
+                // Generate household code
                 currentHouseholdCode = householdInput || generateHouseholdCode();
+                
+                // Simpan data user
                 localStorage.setItem(`user_${regData.user.id}`, JSON.stringify({ 
-                    name, householdCode: currentHouseholdCode, email 
+                    name, 
+                    householdCode: currentHouseholdCode, 
+                    email 
                 }));
                 
-                alert(`✅ Registrasi berhasil!\n\nHousehold Code: ${currentHouseholdCode}`);
+                console.log("✅ Registrasi berhasil! Household Code:", currentHouseholdCode);
+                alert(`✅ Registrasi berhasil!\n\nHousehold Code: ${currentHouseholdCode}\n\nBerikan kode ini ke pasangan Anda.`);
+                
                 data = regData;
             }
             
+            // Login/register berhasil
             currentUser = data.user;
-            const storedData = JSON.parse(localStorage.getItem(`user_${currentUser.id}`));
             
-            if (storedData) {
+            // Jika baru register, simpan data
+            if (!localStorage.getItem(`user_${currentUser.id}`)) {
+                const storedData = JSON.parse(localStorage.getItem(`user_${currentUser.id}`)) || {};
+                currentHouseholdCode = householdInput || storedData.householdCode || generateHouseholdCode();
+                localStorage.setItem(`user_${currentUser.id}`, JSON.stringify({ 
+                    name, 
+                    householdCode: currentHouseholdCode, 
+                    email 
+                }));
+            } else {
+                const storedData = JSON.parse(localStorage.getItem(`user_${currentUser.id}`));
                 currentHouseholdCode = storedData.householdCode;
-                document.getElementById('account-name').innerText = storedData.name;
-                document.getElementById('greeting-name').innerText = storedData.name + "! 👋";
             }
             
+            // Update UI
+            document.getElementById('account-name').innerText = name;
+            document.getElementById('greeting-name').innerText = name + "! 👋";
             document.getElementById('account-email').innerText = currentUser.email;
             document.getElementById('display-household-code').innerText = currentHouseholdCode;
 
+            // Masuk ke app
             document.getElementById('login-screen').style.display = 'none';
             document.getElementById('app-screen').style.display = 'block';
             
@@ -822,15 +924,31 @@
             populateMonthDropdown();
             document.getElementById('tx-date').valueAsDate = new Date();
             
+            console.log("✅ Login berhasil! Session akan bertahan:", rememberDevice ? "30 hari" : "1 jam");
+            
         } catch (error) {
-            console.error("❌ Login error:", error);
+            console.error(" Login error:", error);
             errorMsg.innerText = "❌ " + error.message;
+        } finally {
+            btn.disabled = false;
+            btn.innerText = "Masuk / Daftar";
         }
     };
 
-    window.handleLogout = () => {
-        supabaseClient.auth.signOut();
-        location.reload();
+    // ============================================
+    // LOGOUT
+    // ============================================
+    window.handleLogout = async () => {
+        if (confirm("Yakin ingin logout? Anda perlu login kembali nanti.")) {
+            try {
+                await supabaseClient.auth.signOut();
+                console.log("✅ Logout berhasil");
+                location.reload();
+            } catch (error) {
+                console.error("❌ Logout error:", error);
+                alert("Gagal logout: " + error.message);
+            }
+        }
     };
 
     // ============================================
@@ -838,6 +956,7 @@
     // ============================================
     function setupRealtimeListeners() {
         fetchData();
+        // Auto-refresh setiap 5 detik untuk "real-time" feel
         setInterval(fetchData, 5000);
     }
 
@@ -885,7 +1004,7 @@
     }
 
     // ============================================
-    // DASHBOARD
+    // DASHBOARD FUNCTIONS
     // ============================================
     function populateMonthDropdown() {
         const select = document.getElementById('month-filter');
@@ -1003,11 +1122,8 @@
     updateTxCategories();
 
     window.saveTransaction = async () => {
-        // Check if supabaseClient is ready
         if (!supabaseClient || typeof supabaseClient.from !== 'function') {
             alert("❌ Supabase belum ter-inisialisasi. Refresh halaman dan coba lagi.");
-            console.error("supabaseClient:", supabaseClient);
-            console.error("supabaseClient.from:", typeof supabaseClient?.from);
             return;
         }
 
@@ -1023,9 +1139,6 @@
         }
 
         try {
-            console.log("💾 Saving transaction...");
-            
-            // Save transaction
             const { data: txData, error: txError } = await supabaseClient
                 .from('transactions')
                 .insert({
@@ -1035,9 +1148,7 @@
                 });
 
             if (txError) throw txError;
-            console.log("✅ Transaction saved:", txData);
 
-            // If investment, update assets
             if (type === 'investment') {
                 const { data: existingAsset } = await supabaseClient
                     .from('assets')
@@ -1061,7 +1172,6 @@
                         is_deleted: false
                     });
                 }
-                console.log("✅ Asset updated");
             }
 
             alert("✅ Berhasil disimpan!");
@@ -1090,7 +1200,7 @@
     window.confirmDelete = async () => {
         const reason = document.getElementById('delete-reason').value.trim();
         if (!reason) {
-            alert("⚠️ Harap isi alasan penghapusan!");
+            alert("️ Harap isi alasan penghapusan!");
             return;
         }
 
@@ -1160,7 +1270,7 @@
     // ============================================
     window.saveTask = async () => {
         const title = document.getElementById('task-title').value.trim();
-        if (!title) return alert("⚠️ Judul task wajib diisi!");
+        if (!title) return alert("️ Judul task wajib diisi!");
 
         await supabaseClient.from('tasks').insert({
             household_code: currentHouseholdCode,
