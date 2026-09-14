@@ -300,14 +300,14 @@
 
             try {
                 // Coba login
-                const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+                const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
                 if (error) throw error;
                 currentUser = data.user;
             } catch (error) {
                 // Jika gagal, daftar baru
                 if (error.message.includes('Invalid login credentials')) {
                     try {
-                        const { data, error: regError } = await supabase.auth.signUp({ email, password });
+                        const { data, error: regError } = await supabaseClient.auth.signUp({ email, password });
                         if (regError) throw regError;
                         currentUser = data.user;
                         currentHouseholdCode = householdInput || generateHouseholdCode();
