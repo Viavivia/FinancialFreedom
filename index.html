@@ -1150,19 +1150,28 @@
     // DASHBOARD FUNCTIONS
     // ============================================
     function populateMonthDropdown() {
-        const select = document.getElementById('month-filter');
-        const months = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
-        const today = new Date();
-        
-        for (let i = 0; i < 12; i++) {
-            const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
-            const value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-            const option = document.createElement('option');
-            option.value = value;
-            option.text = `${months[d.getMonth()]} ${d.getFullYear()}`;
-            select.appendChild(option);
-        }
+    const select = document.getElementById('month-filter');
+    select.innerHTML = ''; // Kosongkan dulu agar tidak duplikat jika dipanggil ulang
+    
+    const months = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
+    const today = new Date();
+
+    // Jangkauan: 24 bulan ke belakang (-24) sampai 12 bulan ke depan (+12)
+    for (let i = -24; i <= 12; i++) {
+        const d = new Date(today.getFullYear(), today.getMonth() + i, 1);
+        const value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+        const label = `${months[d.getMonth()]} ${d.getFullYear()}`;
+
+        const option = document.createElement('option');
+        option.value = value;
+        option.text = label;
+        select.appendChild(option);
     }
+
+    // Set default pilihan ke bulan saat ini
+    const currentMonthValue = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+    select.value = currentMonthValue;
+}
 
     window.refreshDashboard = () => {
         const selectedMonth = document.getElementById('month-filter').value;
