@@ -660,10 +660,11 @@
                     <div class="form-group">
                         <label>Jenis Akun</label>
                         <select id="tx-type" class="form-select" onchange="updateTxCategories()">
-                            <option value="earning">Earnings (Pemasukan)</option>
-                            <option value="spending">Spendings (Pengeluaran)</option>
-                            <option value="investment">Investment (Aset/Tabungan)</option>
-                        </select>
+    <option value="earning">Earnings (Pemasukan)</option>
+    <option value="spending">Spendings (Pengeluaran)</option>
+    <option value="investment">Investment (Aset/Tabungan)</option>
+    <option value="debt">Debt (Utang/Pinjaman)</option>
+</select>
                     </div>
                     <div class="form-group">
                         <label>Jenis Transaksi</label>
@@ -1248,10 +1249,11 @@
     // TRANSACTION & ASSET FUNCTIONS
     // ============================================
     const txCategories = {
-        earning: ['Gaji', 'Bonus', 'Margin Penjualan', 'Hadiah', 'Lainnya'],
-        spending: ['Kebutuhan Pokok Keluarga', 'Hiburan', 'Zakat/Sedekah', 'Tabungan', 'Lainnya'],
-        investment: ['Properti', 'Saham', 'Crypto', 'Emas', 'Reksadana/ETF', 'Lainnya']
-    };
+    earning: ['Gaji', 'Bonus', 'Margin Penjualan', 'Hadiah', 'Lainnya'],
+    spending: ['Kebutuhan Pokok Keluarga', 'Tabungan', 'Zakat/Sedekah', 'Hiburan', 'Lainnya'],
+    investment: ['Properti', 'Saham', 'Crypto', 'Emas', 'Reksadana/ETF', 'Lainnya'],
+    debt: ['Pinjaman Bank', 'Lainnya']
+};
 
     window.updateTxCategories = () => {
         const type = document.getElementById('tx-type').value;
@@ -1264,69 +1266,83 @@
     updateTxCategories();
 
     window.saveTransaction = async () => {
-        if (!supabaseClient || typeof supabaseClient.from !== 'function') {
-            alert("❌ Supabase belum ter-inisialisasi. Refresh halaman dan coba lagi.");
-            return;
-        }
+    if (!supabaseClient || typeof supabaseClient.from !== 'function') {
+        alert("❌ Supabase belum ter-inisialisasi.");
+        return;
+    }
 
-        const type = document.getElementById('tx-type').value;
-        const category = document.getElementById('tx-category').value;
-        const amount = parseFloat(document.getElementById('tx-amount').value);
-        const date = document.getElementById('tx-date').value;
-        const note = document.getElementById('tx-note').value.trim() || category;
+    const type = document.getElementById('tx-type').value;
+    const category = document.getElementById('tx-category').value;
+    const amount = parseFloat(document.getElementById('tx-amount').value);
+    const date = document.getElementById('tx-date').value;
+    const note = document.getElementById('tx-note').value.trim() || category;
 
-        if (!amount || !date) {
-            alert("⚠️ Nominal dan Tanggal wajib diisi!");
-            return;
-        }
+    if (!amount || !date) {
+        alert("⚠️ Nominal dan Tanggal wajib diisi!");
+        return;
+    }
 
-        try {
-            const { data: txData, error: txError } = await supabaseClient
-                .from('transactions')
-                .insert({
-                    household_code: currentHouseholdCode,
-                    type, category, amount, date, note,
-                    is_deleted: false
-                });
+    try {
+        // 1. Simpan Transaksi
+        const { data: txData, error: txError } = await supabaseClient
+            .from('transactions')
+            .insert({
+                household_code: currentHouseholdCode,
+                type, category, amount, date, note,
+                is_deleted: false
+            });
 
-            if (txError) throw txError;
+        if (txError) throw txError;
 
-            if (type === 'investment') {
-                const { data: existingAsset } = await supabaseClient
-                    .from('assets')
-                    .select('id, total_value')
-                    .eq('household_code', currentHouseholdCode)
-                    .eq('category', category)
-                    .eq('description', note)
-                    .eq('is_deleted', false)
-                    .single();
+        // 2. Jika Investment ATAU Debt, update/create di tabel assets
+        if (type === 'investment' || type === 'debt') {
+            const { data: existingAsset } = await supabaseClient
+                .from('assets')
+                .select('id, total_value')
+                .eq('household_code', currentHouseholdCode)
+                .eq('category', category)
+                .eq('description', note)
+                .eq('is_deleted', false)
+                .single();
 
-                if (existingAsset) {
-                    await supabaseClient.from('assets')
-                        .update({ total_value: existingAsset.total_value + amount })
-                        .eq('id', existingAsset.id);
-                } else {
-                    await supabaseClient.from('assets').insert({
-                        household_code: currentHouseholdCode,
-                        category,
-                        description: note,
-                        total_value: amount,
-                        is_deleted: false
-                    });
-                }
+            let newValue = amount;
+            if (type === 'debt') {
+                // Debt adalah nilai negatif (kewajiban)
+                newValue = -Math.abs(amount);
             }
 
-            alert("✅ Berhasil disimpan!");
-            document.getElementById('tx-amount').value = '';
-            document.getElementById('tx-note').value = '';
-            navigateTo(1);
-            fetchData();
-            
-        } catch (error) {
-            console.error("❌ Save error:", error);
-            alert("❌ Gagal: " + error.message);
+            if (existingAsset) {
+                // Update: tambahkan ke nilai yang sudah ada
+                await supabaseClient.from('assets')
+                    .update({ 
+                        total_value: existingAsset.total_value + newValue,
+                        type: type // Update type juga
+                    })
+                    .eq('id', existingAsset.id);
+            } else {
+                // Insert: buat aset/utang baru
+                await supabaseClient.from('assets').insert({
+                    household_code: currentHouseholdCode,
+                    category,
+                    description: note,
+                    total_value: newValue,
+                    type: type, // 'investment' atau 'debt'
+                    is_deleted: false
+                });
+            }
         }
-    };
+
+        alert("✅ Berhasil disimpan!");
+        document.getElementById('tx-amount').value = '';
+        document.getElementById('tx-note').value = '';
+        navigateTo(1);
+        fetchData();
+        
+    } catch (error) {
+        console.error("❌ Save error:", error);
+        alert("❌ Gagal: " + error.message);
+    }
+};
 
     window.promptDelete = (id) => {
         itemToDeleteId = id;
@@ -1383,17 +1399,31 @@
     }
 
     function renderAssetList() {
-        const container = document.getElementById('asset-list-container');
-        container.innerHTML = '';
+    const container = document.getElementById('asset-list-container');
+    container.innerHTML = '';
+    
+    // Pisahkan assets dan debts
+    const investments = allAssets.filter(a => a.type === 'investment' || !a.type);
+    const debts = allAssets.filter(a => a.type === 'debt');
+    
+    // Render Investments (Assets)
+    if (investments.length > 0) {
+        container.innerHTML += `
+            <h3 style="margin: 15px 0 10px 0; color: var(--investment-blue); 
+                       border-bottom: 2px solid var(--investment-blue); padding-bottom:5px;
+                       display: flex; align-items: center; gap: 8px;">
+                <i class="fas fa-coins"></i> Aset & Investasi
+            </h3>
+        `;
         
-        const grouped = {};
-        allAssets.forEach(a => {
-            if (!grouped[a.category]) grouped[a.category] = [];
-            grouped[a.category].push(a);
+        const groupedInvestments = {};
+        investments.forEach(a => {
+            if (!groupedInvestments[a.category]) groupedInvestments[a.category] = [];
+            groupedInvestments[a.category].push(a);
         });
 
-        for (const [cat, items] of Object.entries(grouped)) {
-            container.innerHTML += `<h4 style="margin: 15px 0 10px 0; color: var(--terracotta); border-bottom: 1px solid #EEE; padding-bottom:5px;">${cat}</h4>`;
+        for (const [cat, items] of Object.entries(groupedInvestments)) {
+            container.innerHTML += `<h4 style="margin: 15px 0 10px 0; color: var(--earth-text); font-size: 14px;">${cat}</h4>`;
             items.forEach(asset => {
                 container.innerHTML += `
                     <div class="list-item investment">
@@ -1401,11 +1431,80 @@
                             <h4>${asset.description}</h4>
                             <p>Aset Investasi</p>
                         </div>
-                        <div class="amount" style="color: var(--investment-blue);">${formatRupiah(asset.total_value)}</div>
+                        <div class="amount" style="color: var(--investment-blue);">
+                            ${formatRupiah(Math.abs(asset.total_value))}
+                        </div>
                     </div>`;
             });
         }
     }
+    
+    // Render Debts (Utang)
+    if (debts.length > 0) {
+        container.innerHTML += `
+            <h3 style="margin: 25px 0 10px 0; color: var(--spending-red); 
+                       border-bottom: 2px solid var(--spending-red); padding-bottom:5px;
+                       display: flex; align-items: center; gap: 8px;">
+                <i class="fas fa-hand-holding-usd"></i> Utang & Kewajiban
+            </h3>
+        `;
+        
+        const groupedDebts = {};
+        debts.forEach(d => {
+            if (!groupedDebts[d.category]) groupedDebts[d.category] = [];
+            groupedDebts[d.category].push(d);
+        });
+
+        for (const [cat, items] of Object.entries(groupedDebts)) {
+            container.innerHTML += `<h4 style="margin: 15px 0 10px 0; color: var(--earth-text); font-size: 14px;">${cat}</h4>`;
+            items.forEach(debt => {
+                container.innerHTML += `
+                    <div class="list-item spending" style="border-left-color: var(--spending-red);">
+                        <div>
+                            <h4>${debt.description}</h4>
+                            <p>Utang / Kewajiban</p>
+                        </div>
+                        <div class="amount" style="color: var(--spending-red);">
+                            - ${formatRupiah(Math.abs(debt.total_value))}
+                        </div>
+                    </div>`;
+            });
+        }
+    }
+    
+    // Hitung Total Kekayaan Bersih (Net Worth)
+    const totalAssets = investments.reduce((sum, a) => sum + Math.abs(a.total_value), 0);
+    const totalDebts = debts.reduce((sum, d) => sum + Math.abs(d.total_value), 0);
+    const netWorth = totalAssets - totalDebts;
+    
+    // Tampilkan Net Worth
+    if (investments.length > 0 || debts.length > 0) {
+        container.innerHTML += `
+            <div style="margin-top: 25px; padding: 20px; background: linear-gradient(135deg, var(--gold-light) 0%, var(--earth-bg) 100%); 
+                        border-radius: 12px; border: 2px solid var(--gold);">
+                <h4 style="color: var(--earth-text); margin-bottom: 10px; display: flex; align-items: center; gap: 8px;">
+                    <i class="fas fa-chart-line"></i> Kekayaan Bersih (Net Worth)
+                </h4>
+                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px;">
+                    <div>
+                        <p style="font-size: 12px; color: #888;">Total Aset</p>
+                        <p style="font-size: 18px; font-weight: 700; color: var(--investment-blue);">${formatRupiah(totalAssets)}</p>
+                    </div>
+                    <div>
+                        <p style="font-size: 12px; color: #888;">Total Utang</p>
+                        <p style="font-size: 18px; font-weight: 700; color: var(--spending-red);">- ${formatRupiah(totalDebts)}</p>
+                    </div>
+                    <div style="text-align: right;">
+                        <p style="font-size: 12px; color: #888;">Kekayaan Bersih</p>
+                        <p style="font-size: 24px; font-weight: 700; color: ${netWorth >= 0 ? 'var(--earning-green)' : 'var(--spending-red)'};">
+                            ${formatRupiah(netWorth)}
+                        </p>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+}
 
     // ============================================
     // TASK FUNCTIONS
