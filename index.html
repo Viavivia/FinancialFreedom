@@ -524,30 +524,55 @@
 </head>
 <body>
 
-    <!-- LOGIN SCREEN -->
-    <div id="login-screen">
-        <div class="modal-card">
-            <h2 style="color: var(--terracotta); margin-bottom: 5px; text-align: center;">Dompet Keluarga</h2>
-            <p style="font-size: 13px; color: #888; margin-bottom: 20px; text-align: center;">Kelola keuangan bersama pasangan</p>
-            
+   <!-- LOGIN SCREEN DENGAN 2 TAB: MASUK & DAFTAR -->
+<div id="login-screen">
+    <div class="modal-card">
+        <h2 style="color: var(--terracotta); margin-bottom: 5px; text-align: center;">Dompet Keluarga</h2>
+        <p style="font-size: 13px; color: #888; margin-bottom: 20px; text-align: center;">Kelola keuangan bersama pasangan</p>
+        
+        <!-- Tab Navigation -->
+        <div style="display: flex; gap: 10px; margin-bottom: 20px;">
+            <button id="tab-login" class="btn-primary" onclick="switchAuthTab('login')" style="flex: 1; margin: 0;">Masuk</button>
+            <button id="tab-register" class="btn-secondary" onclick="switchAuthTab('register')" style="flex: 1; margin: 0;">Daftar</button>
+        </div>
+
+        <!-- Form Masuk -->
+        <div id="form-login">
             <input type="email" id="login-email" class="input-field" placeholder="Email">
             <input type="password" id="login-password" class="input-field" placeholder="Password">
-            <input type="text" id="login-name" class="input-field" placeholder="Nama Lengkap">
-            <input type="text" id="household-code-input" class="input-field" placeholder="Kode Pasangan (Opsional)">
-
-<!-- Checkbox Trusted Device -->
-<div style="display: flex; align-items: center; gap: 8px; margin: 15px 0; font-size: 13px; color: #666;">
-    <input type="checkbox" id="remember-device" checked style="width: 18px; height: 18px; accent-color: var(--terracotta); cursor: pointer;">
-    <label for="remember-device" style="cursor: pointer;">
-        <i class="fas fa-shield-alt" style="color: var(--terracotta);"></i> 
-        Ingat perangkat ini (tidak perlu login ulang)
-    </label>
-</div>
-
-<button class="btn-primary" onclick="handleLogin()">Masuk / Daftar</button>
-            <p id="login-error" style="color: red; font-size: 12px; margin-top: 10px; text-align: center;"></p>
+            
+            <div style="display: flex; align-items: center; gap: 8px; margin: 15px 0; font-size: 13px; color: #666;">
+                <input type="checkbox" id="remember-device" checked style="width: 18px; height: 18px; accent-color: var(--terracotta); cursor: pointer;">
+                <label for="remember-device" style="cursor: pointer;">
+                    <i class="fas fa-shield-alt" style="color: var(--terracotta);"></i> 
+                    Ingat perangkat ini
+                </label>
+            </div>
+            
+            <button class="btn-primary" onclick="handleLogin()">Masuk</button>
         </div>
+
+        <!-- Form Daftar -->
+        <div id="form-register" style="display: none;">
+            <input type="email" id="register-email" class="input-field" placeholder="Email">
+            <input type="password" id="register-password" class="input-field" placeholder="Password (min. 6 karakter)">
+            <input type="text" id="register-name" class="input-field" placeholder="Nama Lengkap">
+            <input type="text" id="register-household-code" class="input-field" placeholder="Kode Pasangan (Opsional)">
+            
+            <div style="display: flex; align-items: center; gap: 8px; margin: 15px 0; font-size: 13px; color: #666;">
+                <input type="checkbox" id="remember-device-register" checked style="width: 18px; height: 18px; accent-color: var(--terracotta); cursor: pointer;">
+                <label for="remember-device-register" style="cursor: pointer;">
+                    <i class="fas fa-shield-alt" style="color: var(--terracotta);"></i> 
+                    Ingat perangkat ini
+                </label>
+            </div>
+            
+            <button class="btn-primary" onclick="handleRegister()">Daftar</button>
+        </div>
+        
+        <p id="login-error" style="color: red; font-size: 12px; margin-top: 10px; text-align: center; min-height: 20px;"></p>
     </div>
+</div>
 
     <!-- DELETE MODAL -->
     <div id="delete-modal">
