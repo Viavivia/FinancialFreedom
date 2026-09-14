@@ -1,0 +1,682 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Keuangan Keluarga</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- // JS - Import Supabase Client dari CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+    <style>
+        /* =========================================
+           // CSS - VARIABEL WARNA (EARTH TONE) //
+           ========================================= */
+        :root {
+            --terracotta: #E2725B; --terracotta-dark: #C05640;
+            --gold: #D4AF37; --gold-light: #F4E4BC;
+            --earth-bg: #F9F7F2; --earth-text: #4A3B32;
+            --earth-card: #FFFFFF;
+            --earning-green: #556B2F; --spending-red: #A0522D; --investment-blue: #4682B4;
+            --shadow: 0 4px 12px rgba(74, 59, 50, 0.08);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Poppins', sans-serif; -webkit-tap-highlight-color: transparent; }
+        body { background-color: var(--earth-bg); color: var(--earth-text); padding-bottom: 90px; }
+
+        /* // CSS - LOGIN & MODAL STYLES // */
+        #login-screen, #delete-modal {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(74, 59, 50, 0.5); backdrop-filter: blur(5px);
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            padding: 20px; z-index: 1000;
+        }
+        #delete-modal { display: none; } /* Hidden by default */
+
+        .modal-card {
+            background: var(--earth-card); padding: 25px; border-radius: 20px;
+            box-shadow: var(--shadow); width: 100%; max-width: 400px; text-align: center;
+            border-top: 5px solid var(--terracotta);
+        }
+
+        .input-field {
+            width: 100%; padding: 12px 15px; margin: 10px 0;
+            border: 1px solid #DDD; border-radius: 10px; font-size: 14px; background: var(--earth-bg);
+        }
+        .btn-primary {
+            width: 100%; padding: 14px; background: var(--terracotta); color: white;
+            border: none; border-radius: 10px; font-weight: 600; font-size: 16px;
+            cursor: pointer; margin-top: 10px; transition: background 0.3s;
+        }
+        .btn-primary:hover { background: var(--terracotta-dark); }
+        .btn-secondary {
+            width: 100%; padding: 14px; background: #EEE; color: var(--earth-text);
+            border: none; border-radius: 10px; font-weight: 600; font-size: 16px;
+            cursor: pointer; margin-top: 10px;
+        }
+
+        /* // CSS - MAIN APP LAYOUT // */
+        #app-screen { display: none; }
+        .header {
+            padding: 20px; background: var(--earth-card); box-shadow: var(--shadow);
+            position: sticky; top: 0; z-index: 100; display: flex; justify-content: space-between; align-items: center;
+        }
+        .header h2 { font-size: 18px; color: var(--terracotta); }
+        .month-dropdown {
+            padding: 8px 12px; border-radius: 8px; border: 1px solid var(--gold);
+            background: var(--gold-light); color: var(--earth-text); font-weight: 600; font-size: 14px;
+        }
+        .section { display: none; padding: 20px; animation: fadeIn 0.3s ease; }
+        .section.active { display: block; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* // CSS - DASHBOARD & CARDS // */
+        .summary-cards { display: flex; gap: 10px; margin-bottom: 20px; }
+        .summary-card {
+            flex: 1; background: var(--earth-card); padding: 15px 10px; border-radius: 15px;
+            box-shadow: var(--shadow); text-align: center; cursor: pointer; transition: transform 0.2s; border-bottom: 3px solid transparent;
+        }
+        .summary-card:active { transform: scale(0.95); }
+        .summary-card.earning { border-color: var(--earning-green); }
+        .summary-card.spending { border-color: var(--spending-red); }
+        .summary-card.savings { border-color: var(--investment-blue); }
+        .summary-card h4 { font-size: 12px; color: #888; margin-bottom: 5px; }
+        .summary-card .amount { font-size: 14px; font-weight: 700; }
+        .earning .amount { color: var(--earning-green); }
+        .spending .amount { color: var(--spending-red); }
+        .savings .amount { color: var(--investment-blue); }
+
+        .detail-dropdown {
+            max-height: 0; overflow: hidden; transition: max-height 0.3s ease;
+            background: var(--earth-card); border-radius: 10px; margin-top: 5px; box-shadow: var(--shadow);
+        }
+        .detail-dropdown.show { max-height: 500px; padding: 15px; margin-bottom: 15px; }
+        .detail-item { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px dashed #EEE; font-size: 13px; }
+
+        /* // CSS - LISTS (Transactions, Assets, Tasks) // */
+        .list-item {
+            background: var(--earth-card); padding: 15px; border-radius: 12px;
+            margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center;
+            box-shadow: var(--shadow); border-left: 4px solid #CCC;
+        }
+        .list-item.earning { border-left-color: var(--earning-green); }
+        .list-item.spending { border-left-color: var(--spending-red); }
+        .list-item.investment { border-left-color: var(--investment-blue); }
+        .list-item h4 { font-size: 14px; margin-bottom: 4px; }
+        .list-item p { font-size: 12px; color: #888; }
+        .list-item .amount { font-weight: 700; font-size: 15px; text-align: right; }
+        .btn-delete { background: none; border: none; color: #E53E3E; font-size: 12px; cursor: pointer; text-decoration: underline; margin-top: 5px;}
+
+        .todo-item, .completed-item {
+            background: var(--earth-card); padding: 15px; border-radius: 12px;
+            margin-bottom: 10px; display: flex; align-items: center; gap: 12px; box-shadow: var(--shadow);
+        }
+        .completed-item { opacity: 0.6; text-decoration: line-through; }
+        .todo-checkbox { width: 20px; height: 20px; accent-color: var(--terracotta); cursor: pointer; }
+
+        /* // CSS - BOTTOM NAVIGATION // */
+        .bottom-nav {
+            position: fixed; bottom: 0; left: 0; width: 100%; background: var(--earth-card);
+            display: flex; justify-content: space-around; align-items: flex-end;
+            padding: 10px 0 15px 0; box-shadow: 0 -4px 20px rgba(0,0,0,0.05); z-index: 500;
+        }
+        .nav-item { flex: 1; text-align: center; color: #999; text-decoration: none; font-size: 11px; cursor: pointer; transition: color 0.3s; }
+        .nav-item i { font-size: 20px; margin-bottom: 4px; display: block; }
+        .nav-item.active { color: var(--terracotta); font-weight: 600; }
+        .nav-item.center-btn {
+            transform: translateY(-25px); background: var(--terracotta); color: white !important;
+            width: 60px; height: 60px; border-radius: 50%; display: flex; flex-direction: column;
+            justify-content: center; align-items: center; box-shadow: 0 4px 15px rgba(226, 114, 91, 0.4);
+            border: 4px solid var(--earth-bg);
+        }
+        .nav-item.center-btn i { font-size: 24px; margin-bottom: 0; }
+        .nav-item.center-btn span { display: none; }
+    </style>
+</head>
+<body>
+
+    <!-- // HTML - LOGIN SCREEN // -->
+    <div id="login-screen">
+        <div class="modal-card">
+            <h2 style="color: var(--terracotta); margin-bottom: 5px;">Dompet Keluarga</h2>
+            <p style="font-size: 13px; color: #888; margin-bottom: 20px;">Kelola keuangan bersama pasangan</p>
+            <input type="email" id="login-email" class="input-field" placeholder="Email">
+            <input type="password" id="login-password" class="input-field" placeholder="Password">
+            <input type="text" id="login-name" class="input-field" placeholder="Nama Lengkap">
+            <input type="text" id="household-code-input" class="input-field" placeholder="Kode Pasangan (Opsional)">
+            <button class="btn-primary" onclick="handleLogin()">Masuk / Daftar</button>
+            <p id="login-error" style="color: red; font-size: 12px; margin-top: 10px;"></p>
+        </div>
+    </div>
+
+    <!-- // HTML - DELETE CONFIRMATION MODAL // -->
+    <div id="delete-modal">
+        <div class="modal-card">
+            <h3 style="color: var(--spending-red); margin-bottom: 10px;"><i class="fas fa-exclamation-triangle"></i> Konfirmasi Hapus</h3>
+            <p style="font-size: 13px; color: #666; margin-bottom: 15px;">Data tidak akan dihapus permanen (Soft Delete), tetapi mohon isi alasan untuk pencatatan pasangan.</p>
+            <textarea id="delete-reason" class="input-field" rows="3" placeholder="Contoh: Salah input nominal, atau transaksi dibatalkan"></textarea>
+            <button class="btn-primary" style="background: var(--spending-red);" onclick="confirmDelete()">Ya, Hapus Data</button>
+            <button class="btn-secondary" onclick="closeDeleteModal()">Batal</button>
+        </div>
+    </div>
+
+    <!-- // HTML - MAIN APP SCREEN // -->
+    <div id="app-screen">
+        <div class="header">
+            <h2 id="page-title">Dashboard</h2>
+            <select id="month-filter" class="month-dropdown" onchange="refreshDashboard()"></select>
+        </div>
+
+        <!-- SECTION 1: DASHBOARD -->
+        <div id="section-1" class="section active">
+            <div class="summary-cards">
+                <div class="summary-card earning" onclick="toggleDetail('earning-detail')">
+                    <h4>Pemasukan</h4><div class="amount" id="total-earning">Rp 0</div>
+                </div>
+                <div class="summary-card spending" onclick="toggleDetail('spending-detail')">
+                    <h4>Pengeluaran</h4><div class="amount" id="total-spending">Rp 0</div>
+                </div>
+                <div class="summary-card savings" onclick="toggleDetail('savings-detail')">
+                    <h4>Tabungan</h4><div class="amount" id="total-savings">Rp 0</div>
+                </div>
+            </div>
+            <div id="earning-detail" class="detail-dropdown"></div>
+            <div id="spending-detail" class="detail-dropdown"></div>
+            <div id="savings-detail" class="detail-dropdown"></div>
+
+            <div class="todo-section" style="margin-top: 25px;">
+                <h3 style="font-size: 16px; margin-bottom: 15px; color: var(--terracotta);"><i class="fas fa-check-circle"></i> To-Do List</h3>
+                <div id="todo-list-container"></div>
+                <h3 style="margin-top: 20px; font-size: 14px; color: #888;">Selesai (Maks 10 Terbaru)</h3>
+                <div id="completed-list-container"></div>
+            </div>
+        </div>
+
+        <!-- SECTION 2: DAFTAR TRANSAKSI -->
+        <div id="section-2" class="section">
+            <h3 style="margin-bottom: 15px;">Riwayat Transaksi</h3>
+            <div id="transaction-list-container"></div>
+        </div>
+
+        <!-- SECTION 3: TAMBAH DATA -->
+        <div id="section-3" class="section">
+            <div class="tab-buttons" style="display: flex; gap: 10px; margin-bottom: 20px;">
+                <button class="btn-primary" id="tab-tx" onclick="switchTab('tx')" style="flex:1; margin:0;">Transaksi</button>
+                <button class="btn-secondary" id="tab-task" onclick="switchTab('task')" style="flex:1; margin:0;">To-Do Task</button>
+            </div>
+
+            <div id="form-transaction">
+                <div class="input-field" style="margin:0 0 15px 0; padding:0;">
+                    <label style="padding: 10px 15px; display:block; font-size:12px; font-weight:600; color:#888;">Jenis Akun</label>
+                    <select id="tx-type" class="input-field" style="border:none; margin:0; font-weight:600;" onchange="updateTxCategories()">
+                        <option value="earning">Earnings (Pemasukan)</option>
+                        <option value="spending">Spendings (Pengeluaran)</option>
+                        <option value="investment">Investment (Aset/Tabungan)</option>
+                    </select>
+                </div>
+                <div class="input-field" style="margin:0 0 15px 0; padding:0;">
+                    <label style="padding: 10px 15px; display:block; font-size:12px; font-weight:600; color:#888;">Jenis Transaksi</label>
+                    <select id="tx-category" class="input-field" style="border:none; margin:0; font-weight:600;"></select>
+                </div>
+                <input type="number" id="tx-amount" class="input-field" placeholder="Nominal (Rp)">
+                <input type="date" id="tx-date" class="input-field">
+                <input type="text" id="tx-note" class="input-field" placeholder="Keterangan Spesifik (PENTING untuk Investment, misal: 'Rumah Bekasi')">
+                <button class="btn-primary" onclick="saveTransaction()">Simpan Transaksi</button>
+            </div>
+
+            <div id="form-task" style="display: none;">
+                <input type="text" id="task-title" class="input-field" placeholder="Judul Task (misal: Bayar BPJS)">
+                <button class="btn-primary" onclick="saveTask()">Tambah Task</button>
+            </div>
+        </div>
+
+        <!-- SECTION 4: DAFTAR ASET -->
+        <div id="section-4" class="section">
+            <h3 style="margin-bottom: 15px;">Daftar Aset & Kekayaan</h3>
+            <p style="font-size: 12px; color: #888; margin-bottom: 15px;">Dikelompokkan berdasarkan Jenis + Keterangan Spesifik</p>
+            <div id="asset-list-container"></div>
+        </div>
+
+        <!-- SECTION 5: AKUN -->
+        <div id="section-5" class="section">
+            <div class="modal-card" style="max-width: 100%; text-align: left;">
+                <h3 id="account-name" style="color: var(--terracotta);">Nama Pengguna</h3>
+                <p id="account-email" style="color: #888; font-size: 14px; margin-bottom: 20px;">email@contoh.com</p>
+                <label style="font-size: 12px; font-weight: 600;">KODE PASANGAN (Household)</label>
+                <div style="background: var(--gold-light); color: var(--earth-text); padding: 15px; border-radius: 10px; font-size: 24px; font-weight: 700; letter-spacing: 2px; margin: 10px 0; border: 2px dashed var(--gold); text-align: center;" id="display-household-code">----</div>
+                <p style="font-size: 12px; color: #888; text-align: center; margin-bottom: 20px;">Berikan kode ini ke pasangan Anda.</p>
+                <button class="btn-primary" style="background: #888;" onclick="handleLogout()">Logout</button>
+            </div>
+        </div>
+
+        <!-- BOTTOM NAVIGATION -->
+        <div class="bottom-nav">
+            <div class="nav-item active" onclick="navigateTo(1)"><i class="fas fa-home"></i><span>Dashboard</span></div>
+            <div class="nav-item" onclick="navigateTo(2)"><i class="fas fa-list"></i><span>Riwayat</span></div>
+            <div class="nav-item center-btn" onclick="navigateTo(3)"><i class="fas fa-plus"></i><span>Tambah</span></div>
+            <div class="nav-item" onclick="navigateTo(4)"><i class="fas fa-coins"></i><span>Aset</span></div>
+            <div class="nav-item" onclick="navigateTo(5)"><i class="fas fa-cog"></i><span>Akun</span></div>
+        </div>
+    </div>
+
+    <!-- =========================================
+         // JAVASCRIPT - SUPABASE LOGIC //
+         ========================================= -->
+    <script>
+        // =========================================================================
+        // 1. KONFIGURASI SUPABASE (GANTI DENGAN DATA ANDA)
+        // =========================================================================
+        const SUPABASE_URL = "GANTI_DENGAN_SUPABASE_URL_ANDA"; 
+        const SUPABASE_ANON_KEY = "GANTI_DENGAN_SUPABASE_ANON_KEY_ANDA";
+        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        // Variabel Global
+        let currentUser = null;
+        let currentHouseholdCode = "";
+        let allTransactions = [];
+        let allTasks = [];
+        let allAssets = [];
+        let itemToDeleteId = null; // Untuk menyimpan ID yang akan di-soft delete
+
+        // =========================================================================
+        // 2. FUNGSI UTILITAS
+        // =========================================================================
+        const formatRupiah = (angka) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(angka);
+        const generateHouseholdCode = () => Math.random().toString(36).substring(2, 8).toUpperCase();
+
+        // =========================================================================
+        // 3. AUTHENTICATION LOGIC
+        // =========================================================================
+        window.handleLogin = async () => {
+            const email = document.getElementById('login-email').value;
+            const password = document.getElementById('login-password').value;
+            const name = document.getElementById('login-name').value;
+            const householdInput = document.getElementById('household-code-input').value.trim().toUpperCase();
+            const errorMsg = document.getElementById('login-error');
+
+            if (!email || !password || !name) { errorMsg.innerText = "Email, Password, dan Nama wajib diisi!"; return; }
+
+            try {
+                // Coba login
+                const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+                if (error) throw error;
+                currentUser = data.user;
+            } catch (error) {
+                // Jika gagal, daftar baru
+                if (error.message.includes('Invalid login credentials')) {
+                    try {
+                        const { data, error: regError } = await supabase.auth.signUp({ email, password });
+                        if (regError) throw regError;
+                        currentUser = data.user;
+                        currentHouseholdCode = householdInput || generateHouseholdCode();
+                        
+                        // Simpan metadata user (kita simpan di local storage untuk simplicity, atau tabel terpisah jika perlu)
+                        localStorage.setItem(`user_${currentUser.id}`, JSON.stringify({ name, householdCode: currentHouseholdCode }));
+                    } catch (regError) {
+                        errorMsg.innerText = "Gagal daftar: " + regError.message;
+                        return;
+                    }
+                } else {
+                    errorMsg.innerText = "Gagal login: " + error.message;
+                    return;
+                }
+            }
+            
+            // Ambil atau set household code
+            const storedData = JSON.parse(localStorage.getItem(`user_${currentUser.id}`));
+            if (storedData) {
+                currentHouseholdCode = storedData.householdCode;
+                document.getElementById('account-name').innerText = storedData.name;
+            }
+            document.getElementById('account-email').innerText = currentUser.email;
+            document.getElementById('display-household-code').innerText = currentHouseholdCode;
+
+            document.getElementById('login-screen').style.display = 'none';
+            document.getElementById('app-screen').style.display = 'block';
+            
+            setupRealtimeListeners();
+            populateMonthDropdown();
+            document.getElementById('tx-date').valueAsDate = new Date();
+        };
+
+        window.handleLogout = () => {
+            supabase.auth.signOut();
+            location.reload();
+        };
+
+        // =========================================================================
+        // 4. DATABASE LISTENERS & FETCHING
+        // =========================================================================
+        function setupRealtimeListeners() {
+            // Kita gunakan fungsi fetch biasa yang di-trigger ulang, karena Supabase JS v2 realtime butuh setup channel yang lebih kompleks untuk prototype sederhana.
+            // Untuk aplikasi ini, kita akan fetch data setiap kali ada perubahan (atau bisa di-set interval 5 detik untuk "pseudo-realtime").
+            fetchData();
+            setInterval(fetchData, 5000); // Auto-refresh setiap 5 detik
+        }
+
+        async function fetchData() {
+            if (!currentUser) return;
+
+            // 1. Fetch Transactions (hanya yang tidak di-delete)
+            const { data: txData } = await supabase
+                .from('transactions')
+                .select('*')
+                .eq('household_code', currentHouseholdCode)
+                .eq('is_deleted', false)
+                .order('date', { ascending: false });
+            allTransactions = txData || [];
+
+            // 2. Fetch Assets
+            const { data: assetData } = await supabase
+                .from('assets')
+                .select('*')
+                .eq('household_code', currentHouseholdCode)
+                .eq('is_deleted', false);
+            allAssets = assetData || [];
+
+            // 3. Fetch Tasks
+            const { data: taskData } = await supabase
+                .from('tasks')
+                .select('*')
+                .eq('household_code', currentHouseholdCode)
+                .eq('is_deleted', false)
+                .order('created_at', { ascending: false });
+            allTasks = taskData || [];
+
+            refreshDashboard();
+            renderTransactionList();
+            renderAssetList();
+            renderTodoList();
+        }
+
+        // =========================================================================
+        // 5. DASHBOARD & UI LOGIC
+        // =========================================================================
+        function populateMonthDropdown() {
+            const select = document.getElementById('month-filter');
+            const months = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
+            const today = new Date();
+            for (let i = 0; i < 12; i++) {
+                const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
+                const value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+                const option = document.createElement('option');
+                option.value = value;
+                option.text = `${months[d.getMonth()]} ${d.getFullYear()}`;
+                select.appendChild(option);
+            }
+        }
+
+        window.refreshDashboard = () => {
+            const selectedMonth = document.getElementById('month-filter').value;
+            const monthlyTx = allTransactions.filter(tx => tx.date.startsWith(selectedMonth));
+            
+            let totalEarning = 0, totalSpending = 0;
+            const earningDetails = {}, spendingDetails = {}, savingsDetails = {};
+
+            monthlyTx.forEach(tx => {
+                const amount = parseFloat(tx.amount);
+                if (tx.type === 'earning') {
+                    totalEarning += amount;
+                    earningDetails[tx.category] = (earningDetails[tx.category] || 0) + amount;
+                } else if (tx.type === 'spending') {
+                    totalSpending += amount;
+                    spendingDetails[tx.category] = (spendingDetails[tx.category] || 0) + amount;
+                } else if (tx.type === 'investment') {
+                    savingsDetails[tx.category] = (savingsDetails[tx.category] || 0) + amount;
+                }
+            });
+
+            document.getElementById('total-earning').innerText = formatRupiah(totalEarning);
+            document.getElementById('total-spending').innerText = formatRupiah(totalSpending);
+            document.getElementById('total-savings').innerText = formatRupiah(totalEarning - totalSpending);
+
+            renderDetailDropdown('earning-detail', earningDetails, 'earning');
+            renderDetailDropdown('spending-detail', spendingDetails, 'spending');
+            renderDetailDropdown('savings-detail', savingsDetails, 'investment');
+        };
+
+        function renderDetailDropdown(elementId, dataObj, type) {
+            const container = document.getElementById(elementId);
+            container.innerHTML = '';
+            if (Object.keys(dataObj).length === 0) {
+                container.innerHTML = '<p style="text-align:center; color:#888; font-size:12px; padding:10px;">Belum ada data</p>';
+                return;
+            }
+            for (const [category, amount] of Object.entries(dataObj)) {
+                const color = type === 'earning' ? 'var(--earning-green)' : (type === 'spending' ? 'var(--spending-red)' : 'var(--investment-blue)');
+                container.innerHTML += `<div class="detail-item"><span>${category}</span><span style="color:${color}; font-weight:600;">${formatRupiah(amount)}</span></div>`;
+            }
+        }
+
+        window.toggleDetail = (elementId) => {
+            document.querySelectorAll('.detail-dropdown').forEach(d => { if (d.id !== elementId) d.classList.remove('show'); });
+            document.getElementById(elementId).classList.toggle('show');
+        };
+
+        window.navigateTo = (sectionNum) => {
+            document.querySelectorAll('.section').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+            document.getElementById(`section-${sectionNum}`).classList.add('active');
+            const navItems = document.querySelectorAll('.nav-item');
+            if (sectionNum !== 3) navItems[sectionNum - 1].classList.add('active');
+            else navItems[2].classList.add('active');
+            
+            const titles = ["", "Dashboard", "Riwayat Transaksi", "Tambah Data", "Daftar Aset", "Akun & Pengaturan"];
+            document.getElementById('page-title').innerText = titles[sectionNum];
+        };
+
+        window.switchTab = (tab) => {
+            if (tab === 'tx') {
+                document.getElementById('form-transaction').style.display = 'block';
+                document.getElementById('form-task').style.display = 'none';
+                document.getElementById('tab-tx').className = 'btn-primary'; document.getElementById('tab-tx').style.flex = '1'; document.getElementById('tab-tx').style.margin = '0';
+                document.getElementById('tab-task').className = 'btn-secondary'; document.getElementById('tab-task').style.flex = '1'; document.getElementById('tab-task').style.margin = '0';
+            } else {
+                document.getElementById('form-transaction').style.display = 'none';
+                document.getElementById('form-task').style.display = 'block';
+                document.getElementById('tab-task').className = 'btn-primary'; document.getElementById('tab-task').style.flex = '1'; document.getElementById('tab-task').style.margin = '0';
+                document.getElementById('tab-tx').className = 'btn-secondary'; document.getElementById('tab-tx').style.flex = '1'; document.getElementById('tab-tx').style.margin = '0';
+            }
+        };
+
+        // =========================================================================
+        // 6. TRANSACTION & ASSET LOGIC (YANG SUDAH DIUPDATE)
+        // =========================================================================
+        const txCategories = {
+            earning: ['Gaji', 'Bonus', 'Margin Penjualan', 'Hadiah', 'Lainnya'],
+            spending: ['Kebutuhan Pokok Keluarga', 'Hiburan', 'Transportasi', 'Kesehatan', 'Pendidikan', 'Lainnya'],
+            investment: ['Properti', 'Saham', 'Crypto', 'Emas', 'Reksadana/ETF', 'Lainnya']
+        };
+
+        window.updateTxCategories = () => {
+            const type = document.getElementById('tx-type').value;
+            const categorySelect = document.getElementById('tx-category');
+            categorySelect.innerHTML = '';
+            txCategories[type].forEach(cat => {
+                categorySelect.innerHTML += `<option value="${cat}">${cat}</option>`;
+            });
+        };
+        updateTxCategories();
+
+        window.saveTransaction = async () => {
+            const type = document.getElementById('tx-type').value;
+            const category = document.getElementById('tx-category').value;
+            const amount = parseFloat(document.getElementById('tx-amount').value);
+            const date = document.getElementById('tx-date').value;
+            const note = document.getElementById('tx-note').value.trim() || category; // Default ke category jika kosong
+
+            if (!amount || !date) { alert("Nominal dan Tanggal wajib diisi!"); return; }
+
+            try {
+                // 1. Simpan Transaksi
+                await supabase.from('transactions').insert({
+                    household_code: currentHouseholdCode, type, category, amount, date, note, is_deleted: false
+                });
+
+                // 2. LOGIKA INVESTMENT: Gabungkan jika Category DAN Keterangan (note) sama. Pisahkan jika berbeda.
+                if (type === 'investment') {
+                    const { data: existingAsset } = await supabase
+                        .from('assets')
+                        .select('id, total_value')
+                        .eq('household_code', currentHouseholdCode)
+                        .eq('category', category)
+                        .eq('description', note)
+                        .eq('is_deleted', false)
+                        .single();
+
+                    if (existingAsset) {
+                        // Update: Tambahkan nilai ke aset yang sudah ada
+                        await supabase.from('assets').update({ total_value: existingAsset.total_value + amount })
+                            .eq('id', existingAsset.id);
+                    } else {
+                        // Insert: Buat aset baru karena keterangan berbeda (misal: Rumah Bekasi vs Rumah Banyuwangi)
+                        await supabase.from('assets').insert({
+                            household_code: currentHouseholdCode, category, description: note, total_value: amount, is_deleted: false
+                        });
+                    }
+                }
+
+                alert("Berhasil disimpan!");
+                document.getElementById('tx-amount').value = '';
+                document.getElementById('tx-note').value = '';
+                navigateTo(1);
+                fetchData(); // Refresh data
+            } catch (error) {
+                alert("Gagal: " + error.message);
+            }
+        };
+
+        // --- SOFT DELETE LOGIC ---
+        window.promptDelete = (id) => {
+            itemToDeleteId = id;
+            document.getElementById('delete-reason').value = '';
+            document.getElementById('delete-modal').style.display = 'flex';
+        };
+
+        window.closeDeleteModal = () => {
+            document.getElementById('delete-modal').style.display = 'none';
+            itemToDeleteId = null;
+        };
+
+        window.confirmDelete = async () => {
+            const reason = document.getElementById('delete-reason').value.trim();
+            if (!reason) { alert("Harap isi alasan penghapusan untuk pencatatan pasangan."); return; }
+
+            try {
+                // Soft Delete: Update is_deleted menjadi true, bukan menghapus baris
+                await supabase.from('transactions').update({ 
+                    is_deleted: true, 
+                    deletion_reason: reason 
+                }).eq('id', itemToDeleteId);
+                
+                alert("Data berhasil diarsipkan (Soft Delete).");
+                closeDeleteModal();
+                fetchData();
+            } catch (error) {
+                alert("Gagal menghapus: " + error.message);
+            }
+        };
+
+        function renderTransactionList() {
+            const container = document.getElementById('transaction-list-container');
+            container.innerHTML = '';
+            allTransactions.forEach(tx => {
+                const sign = tx.type === 'earning' ? '+' : (tx.type === 'spending' ? '-' : '');
+                const color = tx.type === 'earning' ? 'var(--earning-green)' : (tx.type === 'spending' ? 'var(--spending-red)' : 'var(--investment-blue)');
+                const displayNote = tx.note && tx.note !== tx.category ? `(${tx.note})` : '';
+
+                container.innerHTML += `
+                    <div class="list-item ${tx.type}">
+                        <div>
+                            <h4>${tx.category} <span style="font-weight:400; font-size:12px; color:#666;">${displayNote}</span></h4>
+                            <p>${tx.date}</p>
+                        </div>
+                        <div style="text-align: right;">
+                            <div class="amount" style="color: ${color}">${sign} ${formatRupiah(tx.amount)}</div>
+                            <button class="btn-delete" onclick="promptDelete('${tx.id}')">Hapus</button>
+                        </div>
+                    </div>`;
+            });
+        }
+
+        function renderAssetList() {
+            const container = document.getElementById('asset-list-container');
+            container.innerHTML = '';
+            // Group by Category untuk tampilan yang lebih rapi
+            const grouped = {};
+            allAssets.forEach(a => {
+                if (!grouped[a.category]) grouped[a.category] = [];
+                grouped[a.category].push(a);
+            });
+
+            for (const [cat, items] of Object.entries(grouped)) {
+                container.innerHTML += `<h4 style="margin: 15px 0 10px 0; color: var(--terracotta); border-bottom: 1px solid #EEE; padding-bottom:5px;">${cat}</h4>`;
+                items.forEach(asset => {
+                    container.innerHTML += `
+                        <div class="list-item investment">
+                            <div>
+                                <h4>${asset.description}</h4>
+                                <p>Aset Investasi</p>
+                            </div>
+                            <div class="amount" style="color: var(--investment-blue);">${formatRupiah(asset.total_value)}</div>
+                        </div>`;
+                });
+            }
+        }
+
+        // =========================================================================
+        // 7. TASK LOGIC
+        // =========================================================================
+        window.saveTask = async () => {
+            const title = document.getElementById('task-title').value.trim();
+            if (!title) return alert("Judul task wajib diisi!");
+
+            await supabase.from('tasks').insert({
+                household_code: currentHouseholdCode, title, is_completed: false, is_deleted: false
+            });
+            document.getElementById('task-title').value = '';
+            fetchData();
+        };
+
+        window.toggleTask = async (taskId, currentStatus) => {
+            const updateData = { 
+                is_completed: !currentStatus,
+                completed_at: !currentStatus ? new Date().toISOString() : null
+            };
+            await supabase.from('tasks').update(updateData).eq('id', taskId);
+            fetchData();
+        };
+
+        function renderTodoList() {
+            const todoContainer = document.getElementById('todo-list-container');
+            const completedContainer = document.getElementById('completed-list-container');
+            todoContainer.innerHTML = '';
+            completedContainer.innerHTML = '';
+
+            const activeTasks = allTasks.filter(t => !t.is_completed);
+            const completedTasks = allTasks
+                .filter(t => t.is_completed && t.completed_at)
+                .sort((a, b) => new Date(b.completed_at) - new Date(a.completed_at))
+                .slice(0, 10);
+
+            activeTasks.forEach(task => {
+                todoContainer.innerHTML += `
+                    <div class="todo-item">
+                        <input type="checkbox" class="todo-checkbox" onchange="toggleTask('${task.id}', false)">
+                        <span style="flex:1;">${task.title}</span>
+                    </div>`;
+            });
+
+            completedTasks.forEach(task => {
+                completedContainer.innerHTML += `
+                    <div class="completed-item">
+                        <input type="checkbox" class="todo-checkbox" checked onchange="toggleTask('${task.id}', true)">
+                        <span style="flex:1;">${task.title}</span>
+                    </div>`;
+            });
+        }
+    </script>
+</body>
+</html>
