@@ -1439,33 +1439,58 @@
     };
 
     function renderTodoList() {
-        const todoContainer = document.getElementById('todo-list-container');
-        const completedContainer = document.getElementById('completed-list-container');
-        todoContainer.innerHTML = '';
-        completedContainer.innerHTML = '';
+    const todoContainer = document.getElementById('todo-list-container');
+    const completedContainer = document.getElementById('completed-list-container');
+    todoContainer.innerHTML = '';
+    completedContainer.innerHTML = '';
 
-        const activeTasks = allTasks.filter(t => !t.is_completed);
-        const completedTasks = allTasks
-            .filter(t => t.is_completed && t.completed_at)
-            .sort((a, b) => new Date(b.completed_at) - new Date(a.completed_at))
-            .slice(0, 10);
+    const activeTasks = allTasks.filter(t => !t.is_completed);
+    const completedTasks = allTasks
+        .filter(t => t.is_completed && t.completed_at)
+        .sort((a, b) => new Date(b.completed_at) - new Date(a.completed_at))
+        .slice(0, 10);
 
-        activeTasks.forEach(task => {
-            todoContainer.innerHTML += `
-                <div class="todo-item">
-                    <input type="checkbox" class="todo-checkbox" onchange="toggleTask('${task.id}', false)">
-                    <span style="flex:1;">${task.title}</span>
-                </div>`;
-        });
+    // Render active tasks
+    activeTasks.forEach(task => {
+        todoContainer.innerHTML += `
+            <div class="todo-item">
+                <input type="checkbox" class="todo-checkbox" onchange="toggleTask('${task.id}', false)">
+                <span style="flex:1;">${task.title}</span>
+                <button onclick="deleteTask('${task.id}')" style="background: none; border: none; color: #E53E3E; cursor: pointer; padding: 5px; font-size: 16px;" title="Hapus task">
+                    <i class="fas fa-trash-alt"></i>
+                </button>
+            </div>`;
+    });
 
-        completedTasks.forEach(task => {
-            completedContainer.innerHTML += `
-                <div class="completed-item">
-                    <input type="checkbox" class="todo-checkbox" checked onchange="toggleTask('${task.id}', true)">
-                    <span style="flex:1;">${task.title}</span>
-                </div>`;
-        });
+    // Render completed tasks
+    completedTasks.forEach(task => {
+        completedContainer.innerHTML += `
+            <div class="completed-item">
+                <input type="checkbox" class="todo-checkbox" checked onchange="toggleTask('${task.id}', true)">
+                <span style="flex:1;">${task.title}</span>
+                <button onclick="deleteTask('${task.id}')" style="background: none; border: none; color: #E53E3E; cursor: pointer; padding: 5px; font-size: 16px;" title="Hapus task">
+                    <i class="fas fa-trash-alt"></i>
+                </button>
+            </div>`;
+    });
+}
+
+// Fungsi hapus langsung
+window.deleteTask = async (taskId) => {
+    if (confirm("Yakin ingin menghapus task ini?")) {
+        try {
+            await supabaseClient.from('tasks')
+                .update({ is_deleted: true })
+                .eq('id', taskId);
+            
+            console.log("✅ Task deleted");
+            fetchData();
+        } catch (error) {
+            console.error("❌ Delete error:", error);
+            alert("Gagal menghapus: " + error.message);
+        }
     }
+};
 </script>
 </body>
 </html>
